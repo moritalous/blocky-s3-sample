@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react'
 
 import Blockly from 'blockly';
+import { javascriptGenerator } from 'blockly/javascript';
 import * as Ja from 'blockly/msg/ja';
+
+import * as consoleLogBlock from './block/consoleLog'
+import * as importBlock from './block/import'
+import * as createS3ClientBlock from './block/createS3Client'
+import * as listObjectsBlock from './block/listObjects'
 
 // https://usehooks.com/useWindowSize/
 function useWindowSize() {
@@ -389,6 +395,8 @@ const toolboxXml = `<xml xmlns="https://developers.google.com/blockly/xml" id="t
 <category name="Variables" colour="#a55b80" custom="VARIABLE"></category>
 <category name="Functions" colour="#995ba5" custom="PROCEDURE"></category>
 <sep></sep>
+<category name="Debug" custom="debug" colour="#888888"></category>
+<sep></sep>
 <category name="AWS" custom="AWS" colour="#FF9900"></category>
 </xml>`
 
@@ -396,16 +404,57 @@ const toolboxXml = `<xml xmlns="https://developers.google.com/blockly/xml" id="t
 function App() {
 
   const [workspace, setWorkspace] = useState<Blockly.WorkspaceSvg>()
+  const [generatedCode, setGeneratedCode] = useState('')
 
   const size = useWindowSize();
 
   useEffect(() => {
 
     Blockly.setLocale(Ja)
-    Blockly.defineBlocksWithJsonArray([])
+    Blockly.defineBlocksWithJsonArray([
+      consoleLogBlock.define,
+      importBlock.define,
+      createS3ClientBlock.define,
+      listObjectsBlock.define
+    ])
 
     const myWorkspace = Blockly.inject('blocklyDiv', { toolbox: toolboxXml })
     setWorkspace(myWorkspace)
+
+    const debugFlyoutCallback = function (workspace: Blockly.WorkspaceSvg) {
+      const blockList = [
+        {
+          "kind": "block",
+          "type": consoleLogBlock.blockType
+        },
+      ];
+      return blockList;
+    };
+    myWorkspace.registerToolboxCategoryCallback('debug', debugFlyoutCallback);
+
+    const awsFlyoutCallback = function (workspace: Blockly.WorkspaceSvg) {
+      const blockList = [
+        {
+          "kind": "block",
+          "type": importBlock.blockType
+        },
+        {
+          "kind": "block",
+          "type": createS3ClientBlock.blockType
+        },
+        {
+          "kind": "block",
+          "type": listObjectsBlock.blockType
+        },
+      ];
+      return blockList;
+    };
+    myWorkspace.registerToolboxCategoryCallback('AWS', awsFlyoutCallback);
+
+    javascriptGenerator[consoleLogBlock.blockType] = consoleLogBlock.javascriptCode
+    javascriptGenerator[importBlock.blockType] = importBlock.javascriptCode
+    javascriptGenerator[createS3ClientBlock.blockType] = createS3ClientBlock.javascriptCode
+    javascriptGenerator[listObjectsBlock.blockType] = listObjectsBlock.javascriptCode
 
   }, [])
 
@@ -415,6 +464,14 @@ function App() {
     }
   }, [workspace, size.width, size.height])
 
+
+  const generateCode = (() => {
+    const jsCode = javascriptGenerator.workspaceToCode(workspace)
+
+    setGeneratedCode(jsCode)
+  })
+
+
   return (
     <>
       <div style={{}}>
@@ -423,6 +480,13 @@ function App() {
           style={{ height: '50vh', width: '100vw' }}
         ></div>
         <div>
+          <button onClick={generateCode}>generate code</button>
+          <br />
+          <textarea
+            readOnly
+            style={{ height: '40vh', width: '100vw' }}
+            value={generatedCode}
+          ></textarea>
         </div>
       </div>
     </>
